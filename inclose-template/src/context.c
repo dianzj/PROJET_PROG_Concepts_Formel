@@ -91,43 +91,44 @@ FormalContext* ctx_read(FILE* f)
      *  - en cas d'échec ou de dimensions trop grandes : message sur stderr,
      *    puis  return fail(line, ctx);
      */
-    if (nb_obj==0){
-        return fail(line, ctx);
     
-    }
-    ctx=malloc(sizeof(FormalContext));
+    ctx=calloc(1,sizeof(FormalContext));
     if(ctx==NULL){
-        fprint(stderr,"erreur d allocation memoire ctx");
+        fprintf(stderr,"erreur d allocation memoire ctx\n");
         return fail(line, ctx);
     }
     ctx->nb_obj=nb_obj;
     ctx->nb_att=nb_att;
-    ctx->nb_word_obj=nb_obj/64 + (nb_obj %64)!=0;
+    ctx->nb_word_obj=nb_obj/WORD_BITS + ( (nb_obj %WORD_BITS)!=0);
     
-    ctx->nb_word_att=nb_att/64 + (nb_obj %64)!=0;
+    ctx->nb_word_att=nb_att/WORD_BITS + ((nb_att %WORD_BITS)!=0);
 
-    if(nb_obj==0){
-        fprint(stderr,"nombre d objet egal a 0");
+    if (ctx->nb_word_obj !=0 && nb_att>SIZE_MAX/ctx->nb_word_obj ){
+        fprintf(stderr,"erreur depassement de representation size_t de nb_word_obj*nb_att\n");
         return fail(line, ctx);
     }
-    if(nb_att==0){
-        ctx->incidence=calloc(ctx->nb_word_obj,sizeof(word));
-    }
+    ctx->incidence=calloc(nb_att*ctx->nb_word_obj,sizeof(word));
 
-    else{
-        ctx->incidence=calloc(nb_att*ctx->nb_word_obj,sizeof(word));
-    }
-    if(ctx->incidence==NULL){
-        fprint(stderr,"erreur d allocation memoire ctx->incident");
+
+    if(ctx->incidence==NULL && nb_obj!=0 && nb_att!=0){
+        fprintf(stderr,"erreur d allocation memoire d incidence \n");
         return fail(line,ctx);
     }
 
-    ctx->incidence=calloc(nb_att*ctx->nb_word_obj,sizeof(word));
+   
 
     ctx->obj_names=calloc(nb_obj,sizeof(char*));
+    if(ctx->obj_names==NULL && nb_obj!=0){
+        fprintf(stderr,"erreur d allocation memoire ctx->obj_names\n");
+        return fail(line,ctx);
+    }
     
     ctx->att_names=calloc(nb_att,sizeof(char*));
     
+    if(ctx->att_names==NULL && nb_att!=0){
+        fprintf(stderr,"erreur d allocation memoire ctx->att_names\n");
+        return fail(line,ctx);
+    }
 
 
     /* TODO */
@@ -140,12 +141,12 @@ FormalContext* ctx_read(FILE* f)
         }
         /* TODO : stocker une copie de `line` dans ctx->obj_names[i]
            (échec d'allocation => message + return fail(line, ctx);) */
-        ctx->obj_names[i]=malloc(strlen(line)+1);
+        ctx->obj_names[i]=duplicate_string(line);
         if(ctx->obj_names[i]==NULL){
-             fprintf(stderr, "Erreur d allocation de obj_name[%zu].\n",i);
+             fprintf(stderr, "Erreur d allocation du nom de l objet %zu.\n",i);
              return fail(line,ctx);
         }   
-        strcpy(ctx->obj_names[i],line);   
+         
     }
 
     /* 8. Noms des attributs */
@@ -155,12 +156,12 @@ FormalContext* ctx_read(FILE* f)
             return fail(line, ctx);
         }
         /* TODO : stocker une copie de `line` dans ctx->att_names[j] */
-        ctx->att_names[j]=malloc(strlen(line)+1);
-        if(ctx->obj_names[j]==NULL){
-             fprintf(stderr, "Erreur d allocation de att_name[%zu].\n",j);
+        ctx->att_names[j]=duplicate_string(line);
+        if(ctx->att_names[j]==NULL){
+             fprintf(stderr, "Erreur d allocation  de l attribut %zu.\n",j);
              return fail(line,ctx);
         }   
-        strcpy(ctx->att_names[j],line);
+        
     }
 
     /* 9. Matrice d'incidence : une ligne par objet, un caractère par attribut
@@ -178,7 +179,7 @@ FormalContext* ctx_read(FILE* f)
             if (line[j] == 'X') {
                 /* TODO : mettre à 1 le bit de l'objet i dans l'extent
                    de l'attribut j (dans ctx->incidence) */
-                ctx->incidence[j*ctx->nb_word_obj+i/64]|=UINT64_C(1)<<(i%64);   
+                ctx->incidence[j*ctx->nb_word_obj+i/WORD_BITS]|=UINT64_C(1)<<(i%WORD_BITS);   
             } else if (line[j] != '.') {
                 fprintf(stderr,
                     "Erreur : caractère '%c' invalide pour l'objet %zu, attribut %zu.\n",
